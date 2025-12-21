@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "dependencies": {
+    "@3-/gitsync": "^0.1.23"
+  }
+}

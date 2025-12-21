@@ -1,0 +1,61 @@
+name: gitsync
+
+permissions: write-all
+
+env:
+  TZ: Asia/Shanghai
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 分钟 小时 日期 月份 星期（0-6）//0代表星期天
+    - cron: "*/5 * * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: .
+
+      - name: checkout private conf
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository_owner }}/conf
+          token: ${{ secrets.GH_PAT }}
+          path: conf
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: sync
+        id: ci
+        run: |
+          git config --global user.email $(git log -1 --pretty=format:'%ae')
+          git config --global user.name ${{ github.repository_owner }}
+          bun i
+          bun i -g @qwen-code/qwen-code@latest
+          rm -rf ~/.ssh
+          ln -s $(pwd)/conf/ssh ~/.ssh
+          chmod 600 ~/.ssh/*
+          ./run.sh
+          [[ $(git status -s) ]] &&
+          git add . &&
+          git commit -m^ &&
+          echo "push=1" >> $GITHUB_OUTPUT || true
+
+      - name: push
+        uses: ad-m/github-push-action@master
+        if: steps.ci.outputs.push == '1'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
